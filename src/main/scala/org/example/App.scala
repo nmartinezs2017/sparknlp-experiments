@@ -20,7 +20,6 @@ object App extends App {
   val spark = SparkSession.builder.appName("SparkNLP-Scala-Experiments")
     .master("local[*]")
     .getOrCreate()
-  import spark.implicits._
   // Read Tweet Dataset
   val df = spark.read.option("header",true).csv("data/tweet_dataset.csv")
 
