@@ -1,7 +1,8 @@
 package org.example
 
 import com.johnsnowlabs.nlp.{DocumentAssembler, Finisher}
-import com.johnsnowlabs.nlp.annotators.{LemmatizerModel, Stemmer, Tokenizer}
+import com.johnsnowlabs.nlp.annotators.{LemmatizerModel, Stemmer, StopWordsCleaner, Tokenizer}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.clustering.LDA
 import org.apache.spark.ml.feature.CountVectorizer
@@ -9,6 +10,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, IntegerType, StructField, StructType}
 
 import scala.collection.mutable
+import scala.io.Source
 
 /**
  * Spark NLP Experiments
@@ -20,6 +22,7 @@ object App extends App {
   val spark = SparkSession.builder.appName("SparkNLP-Scala-Experiments")
     .master("local[*]")
     .getOrCreate()
+
   // Read Tweet Dataset
   val df = spark.read.option("header",true).csv("data/tweet_dataset.csv")
 
@@ -39,6 +42,17 @@ object App extends App {
     .setInputCols(Array("document"))
     .setOutputCol("token")
 
+  // Stop words dictionary
+  val bufferedSource = Source.fromFile("spanish.txt")
+  val stopwords = bufferedSource.getLines().toArray
+
+  // StopWordsCleaner
+  val stopWordsCleaner = new StopWordsCleaner()
+    .setInputCols("token")
+    .setOutputCol("cleanTokens")
+    .setStopWords(stopwords)
+    .setCaseSensitive(false)
+
   // Stemmer. Returns hard-stems out of words with the objective of retrieving the meaningful part of the word
   val stemmer = new Stemmer()
     .setInputCols(Array("cleanTokens"))
@@ -46,7 +60,7 @@ object App extends App {
 
   // Lemmatizer. Retrieves lemmas out of words with the objective of returning a base dictionary word
   val lemmatizer = LemmatizerModel.pretrained("lemma", "es")
-    .setInputCols(Array("token"))
+    .setInputCols(Array("cleanTokens"))
     .setOutputCol("lemma")
 
   // Finisher. Helps to clean the metadata and output the results into an array
@@ -61,6 +75,7 @@ object App extends App {
     setStages(Array(
       documentAssembler,
       tokenizer,
+      stopWordsCleaner,
       lemmatizer,
       finisher
     ))
