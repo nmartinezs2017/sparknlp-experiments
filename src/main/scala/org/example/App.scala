@@ -84,9 +84,12 @@ object App extends App {
     fit(df).
     transform(df).toDF()
 
+  preprocessed_df.show()
+  preprocessed_df.select("cleanTokens").show(20, false)
+  preprocessed_df.select("lemma").show(20, false)
   val tokens_df = preprocessed_df.select("tokens")
 
-  //////// TOKENIZATION /////////
+  //////// TOKENS -> FEATURES /////////
 
   val cv = new CountVectorizer().setInputCol("tokens").setOutputCol("features").setMinDF(100)
   val cv_model = cv.fit(tokens_df)
@@ -99,12 +102,13 @@ object App extends App {
   val num_topics = 6
   val lda = new LDA().setK(num_topics).setMaxIter(10)
   val model = lda.fit(vectorized_tokens)
+
+  //////// SHOW RESULTS /////////
   val ll = model.logLikelihood(vectorized_tokens)
   val lp = model.logPerplexity(vectorized_tokens)
   println("The lower bound on the log likelihood of the entire corpus: " + ll)
   println("The upper bound on perplexity: " + lp)
 
-  //////// SHOW RESULTS /////////
   val vocab = cv_model.vocabulary
   val topics = model.describeTopics()
   val topics_rdd = topics.rdd
