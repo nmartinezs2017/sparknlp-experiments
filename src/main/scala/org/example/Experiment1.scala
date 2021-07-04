@@ -2,10 +2,14 @@ package org.example
 
 import com.johnsnowlabs.nlp.{DocumentAssembler, Finisher}
 import com.johnsnowlabs.nlp.annotators.{LemmatizerModel, StopWordsCleaner, Tokenizer}
+import com.typesafe.config.ConfigFactory
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.clustering.LDA
 import org.apache.spark.ml.feature.CountVectorizer
 import org.apache.spark.sql.SparkSession
+
+import java.io.File
+import java.util.Properties
 import scala.io.Source
 import scala.collection.mutable.ListBuffer
 
@@ -14,14 +18,20 @@ import scala.collection.mutable.ListBuffer
  *
  */
 object Experiment1 extends App {
+
+  // Import config
+  val config = ConfigFactory.parseFile(new File("application.conf"))
+  val sparkConfig = config.getConfig("conf.spark")
+  val experiment1Config = config.getConfig("conf.experiment1")
+
   // Create context
-  System.setProperty("hadoop.home.dir", "C:\\Users\\USER\\IdeaProjects\\spark-nlp")
+  System.setProperty("hadoop.home.dir", sparkConfig.getString("HOME_DIR"))
   val spark = SparkSession.builder.appName("SparkNLP-Scala-Experiments")
-    .master("local[*]")
+    .master(sparkConfig.getString("master"))
     .getOrCreate()
 
   // Read Tweet Dataset
-  val df = spark.read.option("header",true).csv("data/experimento1/dataset_5000f_14h.csv")
+  val df = spark.read.option("header",true).csv(experiment1Config.getString("DATASET_PATH"))
   df.show()
 
   //////// PREPROCESSING /////////
@@ -82,7 +92,7 @@ object Experiment1 extends App {
 
   //////// TOKENS -> FEATURES /////////
 
-  val cv = new CountVectorizer().setInputCol("tokens").setOutputCol("features").setMinDF(50)
+  val cv = new CountVectorizer().setInputCol("tokens").setOutputCol("features").setMinDF(experiment1Config.getInt("minDF"))
   val cv_model = cv.fit(tokens_df)
   // transform the data. Output column name will be features.
   val vectorized_tokens = cv_model.transform(tokens_df)
@@ -90,8 +100,8 @@ object Experiment1 extends App {
   vectorized_tokens.show()
 
   //////// TRANING /////////
-  val num_topics = 14
-  val lda = new LDA().setK(num_topics).setMaxIter(100) // 500 antes
+  val num_topics = experiment1Config.getInt("numTopics")
+  val lda = new LDA().setK(num_topics).setMaxIter(experiment1Config.getInt("maxIter"))
   val model = lda.fit(vectorized_tokens)
 
   //////// SHOW RESULTS /////////
@@ -101,7 +111,7 @@ object Experiment1 extends App {
   println("The upper bound on perplexity: " + lp)
 
   val vocab = cv_model.vocabulary
-  val topics = model.describeTopics(20)
+  val topics = model.describeTopics(experiment1Config.getInt("maxTermsPerTopic"))
   val topics_rdd = topics.rdd
   topics.show()
 
@@ -121,7 +131,7 @@ object Experiment1 extends App {
 
   //////// SAVE RESULTS /////////
   import java.io._
-  val pw = new PrintWriter(new File("20000f_14h.txt"))
+  val pw = new PrintWriter(new File(experiment1Config.getString("RESULTS_PATH")))
   pw.write(results_text.mkString("\n"))
   pw.close
 
