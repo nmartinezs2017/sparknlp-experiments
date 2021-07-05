@@ -22,6 +22,7 @@ object Experiment2 extends App {
   val config = ConfigFactory.parseFile(new File("application.conf"))
   val sparkConfig = config.getConfig("conf.spark")
   val experiment2Config = config.getConfig("conf.experiment2")
+  val complete = experiment2Config.getBoolean("complete")
 
   // Create context
   System.setProperty("hadoop.home.dir", sparkConfig.getString("HADOOP_DIR"))
@@ -31,8 +32,6 @@ object Experiment2 extends App {
 
   // Read Tweet Dataset
   val df_all = spark.read.option("header",true).csv(experiment2Config.getString("DATASET_PATH"))
-  df_all.show()
-
 
   //////////// EXPERIMENT PREPARATION //////////////
 
@@ -45,19 +44,20 @@ object Experiment2 extends App {
     .select($"other_hashtags", $"preprocessed", explode($"other_hashtags"))
   val df_explode = df_aux.filter(length(df_aux("col")) >= 1)
 
-  df_explode.show()
+  // df_explode.show()
 
   val df_order_hashtags = df_explode.groupBy("col").count().sort(desc("count"))
-  df_order_hashtags.show()
+  // df_order_hashtags.show()
 
   val total = df_order_hashtags.select(sum("count")).first().getLong(0)
   val df_percentage = df_order_hashtags.withColumn("count", $"count" / total)
-  df_percentage.show()
+  // df_percentage.show()
 
   val df_top_hashtags = df_percentage.filter(df_percentage("count") > 0.01)
+  println("|------ TOP HASHTAGS ------|")
   df_top_hashtags.show(false)
 
-  val numTopics = df_top_hashtags.count()
+  val numTopics = df_top_hashtags.count().toInt
 
   println(s"Num topics: $numTopics")
 
@@ -67,7 +67,7 @@ object Experiment2 extends App {
 
   val df_only_top = df_explode.filter(df_explode("col").isin(list_top : _*)).distinct()
 
-  df_only_top.show()
+  // df_only_top.show()
 
   //////// PREPROCESSING /////////
 
@@ -116,12 +116,9 @@ object Experiment2 extends App {
     ))
 
   val preprocessed_df = pipeline.
-    fit(df_all).
-    transform(df_all).toDF()
+    fit(df_only_top).
+    transform(df_only_top).toDF()
 
-  preprocessed_df.show()
-  preprocessed_df.select("cleanTokens").show(20, false)
-  preprocessed_df.select("lemma").show(20, false)
   val tokens_df = preprocessed_df.select("tokens")
 
   //////// TOKENS -> FEATURES /////////
@@ -130,12 +127,12 @@ object Experiment2 extends App {
   val cv_model = cv.fit(tokens_df)
   // transform the data. Output column name will be features.
   val vectorized_tokens = cv_model.transform(tokens_df)
-  println("Tokenization result")
-  vectorized_tokens.show()
+  // println("Tokenization result")
+  // vectorized_tokens.show()
 
   //////// TRANING /////////
-  val num_topics = experiment2Config.getInt("numTopics")
-  val lda = new LDA().setK(num_topics).setMaxIter(experiment2Config.getInt("maxIter"))
+
+  val lda = new LDA().setK(numTopics).setMaxIter(experiment2Config.getInt("maxIter"))
   val model = lda.fit(vectorized_tokens)
 
   //////// SHOW RESULTS /////////
@@ -147,8 +144,7 @@ object Experiment2 extends App {
   val vocab = cv_model.vocabulary
   val topics = model.describeTopics(experiment2Config.getInt("maxTermsPerTopic"))
   val topics_rdd = topics.rdd
-  topics.show()
-  topics
+  // topics.show()
 
   val topics_words = topics_rdd
     .map(row => row.getAs[scala.collection.mutable.WrappedArray[Int]]("termIndices"))
