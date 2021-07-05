@@ -9,7 +9,6 @@ import org.apache.spark.ml.feature.CountVectorizer
 import org.apache.spark.sql.SparkSession
 
 import java.io.File
-import java.util.Properties
 import scala.io.Source
 import scala.collection.mutable.ListBuffer
 
@@ -25,7 +24,7 @@ object Experiment1 extends App {
   val experiment1Config = config.getConfig("conf.experiment1")
 
   // Create context
-  System.setProperty("hadoop.home.dir", sparkConfig.getString("HOME_DIR"))
+  System.setProperty("hadoop.home.dir", sparkConfig.getString("HADOOP_DIR"))
   val spark = SparkSession.builder.appName("SparkNLP-Scala-Experiments")
     .master(sparkConfig.getString("master"))
     .getOrCreate()
@@ -114,12 +113,15 @@ object Experiment1 extends App {
   val topics = model.describeTopics(experiment1Config.getInt("maxTermsPerTopic"))
   val topics_rdd = topics.rdd
   topics.show()
+  topics
 
   val topics_words = topics_rdd
     .map(row => row.getAs[scala.collection.mutable.WrappedArray[Int]]("termIndices"))
     .map(idx_list => idx_list.map(idx => vocab.lift(idx)))
 
   var results_text: ListBuffer[String] = ListBuffer()
+
+  println("|------ TOPICS ------|")
 
   topics_words.foreach(array_token => {
     val array_words = array_token.map({ case Some(word) => word })
@@ -134,15 +136,5 @@ object Experiment1 extends App {
   val pw = new PrintWriter(new File(experiment1Config.getString("RESULTS_PATH")))
   pw.write(results_text.mkString("\n"))
   pw.close
-
-  /**
-  topics_words.zipWithIndex.foreach(anyRef => {
-    val array_token = anyRef._1
-    val array_words = array_token.map({ case Some(word) => word })
-    val output_topic = anyRef._2 + "\n" + array_words.mkString(" ")
-    println(output_topic)
-  }
-  )**/
-
 
 }
