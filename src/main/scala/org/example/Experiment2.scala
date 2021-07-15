@@ -22,7 +22,6 @@ object Experiment2 extends App {
   val config = ConfigFactory.parseFile(new File("application.conf"))
   val sparkConfig = config.getConfig("conf.spark")
   val experiment2Config = config.getConfig("conf.experiment2")
-  val complete = experiment2Config.getBoolean("complete")
 
   // Create context
   System.setProperty("hadoop.home.dir", sparkConfig.getString("HADOOP_DIR"))
@@ -44,30 +43,32 @@ object Experiment2 extends App {
     .select($"other_hashtags", $"preprocessed", explode($"other_hashtags"))
   val df_explode = df_aux.filter(length(df_aux("col")) >= 1)
 
-  // df_explode.show()
+  df_explode.show(5)
 
-  val df_order_hashtags = df_explode.groupBy("col").count().sort(desc("count"))
-  // df_order_hashtags.show()
+  val df_order_hashtags = df_explode.groupBy("col").count().sort(desc("count")).withColumnRenamed("col", "hashtag")
+  df_order_hashtags.show(5)
 
   val total = df_order_hashtags.select(sum("count")).first().getLong(0)
-  val df_percentage = df_order_hashtags.withColumn("count", $"count" / total)
-  // df_percentage.show()
+  val df_percentage = df_order_hashtags.withColumn("count", $"count" / total).withColumnRenamed("count", "popularity")
+  df_percentage.show(5)
 
-  val df_top_hashtags = df_percentage.filter(df_percentage("count") > 0.01)
-  println("|------ TOP HASHTAGS ------|")
-  df_top_hashtags.show(false)
+  val df_top_hashtags = df_percentage.filter(df_percentage("popularity") > experiment2Config.getString("FILTER"))
+  println("+-------------TOP HASHTAGS--------------+")
 
   val numTopics = df_top_hashtags.count().toInt
-
+  df_top_hashtags.show(numTopics,false)
   println(s"Num topics: $numTopics")
 
   // Filtrar tuits
-  val list_top=df_top_hashtags.select("col").map(f=>f.getString(0))
+  val list_top=df_top_hashtags.select("hashtag").map(f=>f.getString(0))
     .collect.toList
 
   val df_only_top = df_explode.filter(df_explode("col").isin(list_top : _*)).distinct()
 
-  // df_only_top.show()
+  val numTweets = df_only_top.count().toInt
+  println(s"Num tweets: $numTweets")
+
+  df_only_top.show(numTopics)
 
   //////// PREPROCESSING /////////
 
